@@ -1,40 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>实时时钟</title>
-<style>
-  body {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #f5f5f5;
-  }
-  #clock {
-    font-size: 48px; /* 增大字体大小 */
-    font-weight: bold;
-    color: #333;
-  }
-</style>
-<script>
-function updateTime() {
-    var now = new Date(); // 获取当前时间
-    var hours = now.getHours(); // 小时
-    var minutes = now.getMinutes(); // 分钟
-    var seconds = now.getSeconds(); // 秒数
-    var formattedTime = hours + ':' +
-                        (minutes < 10 ? '0' : '') + minutes + ':' +
-                        (seconds < 10 ? '0' : '') + seconds;
-    document.getElementById('clock').textContent = formattedTime;
-}
-setInterval(updateTime, 1000); // 每1000毫秒（1秒）更新时间
-</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Real-time Clock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#6B7280',
+                        accent: '#3B82F6',
+                        dark: '#1F2937',
+                        light: '#F9FAFB',
+                        danger: '#EF4444'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .clock-container {
+                @apply relative bg-white dark:bg-dark rounded-2xl shadow-xl p-8 transition-all duration-300 transform hover:scale-[1.01] hover:shadow-2xl;
+            }
+            .time-display {
+                @apply text-[clamp(2.5rem,8vw,5rem)] font-bold text-primary dark:text-white text-shadow transition-colors duration-300;
+            }
+            .date-display {
+                @apply text-[clamp(1rem,3vw,1.5rem)] text-secondary dark:text-gray-300 transition-colors duration-300;
+            }
+            .mode-toggle {
+                @apply absolute top-4 right-4 w-10 h-5 rounded-full bg-gray-300 dark:bg-gray-600 transition-colors duration-300 cursor-pointer;
+            }
+            .mode-toggle-circle {
+                @apply absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300;
+            }
+            .toggle-dark .mode-toggle-circle {
+                transform: translateX(200%);
+            }
+            .system-time-alert {
+                @apply bg-red-50 dark:bg-red-900 border-l-4 border-danger text-danger dark:text-red-200 p-4 mb-4 rounded-r-lg opacity-0 transition-opacity duration-500;
+            }
+            .system-time-alert.visible {
+                @apply opacity-100;
+            }
+        }
+    </style>
 </head>
-<body onload="updateTime()">
-<div id="clock"></div> <!-- 时间显示的位置 -->
+<body class="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 transition-colors duration-300">
+    <div class="clock-container max-w-md w-full mx-auto">
+        <div id="modeToggle" class="mode-toggle">
+            <div class="mode-toggle-circle"></div>
+        </div>
+        
+        <!-- 系统时间提示 -->
+        <div id="systemTimeAlert" class="system-time-alert">
+            <div class="flex items-start">
+                <div class="flex-shrink-0 pt-0.5">
+                    <i class="fa fa-exclamation-triangle text-lg"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium">If you can not access the elements, please check your system time</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex flex-col items-center justify-center space-y-4">
+            <div id="time" class="time-display"></div>
+            <div id="date" class="date-display"></div>
+            <div id="day" class="text-lg text-secondary dark:text-gray-400 transition-colors duration-300"></div>
+        </div>
+        <div class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p>Local Time Zone: <span id="timeZone"></span></p>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const timeElement = document.getElementById('time');
+        const dateElement = document.getElementById('date');
+        const dayElement = document.getElementById('day');
+        const timeZoneElement = document.getElementById('timeZone');
+        const modeToggle = document.getElementById('modeToggle');
+        const htmlElement = document.documentElement;
+        const systemTimeAlert = document.getElementById('systemTimeAlert');
+
+        // Days of the week and months
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        // Check for saved theme preference or use device preference
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const currentTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+        // Set initial theme
+        if (currentTheme === 'dark') {
+            htmlElement.classList.add('dark');
+            modeToggle.classList.add('toggle-dark');
+        }
+
+        // Toggle dark mode
+        modeToggle.addEventListener('click', () => {
+            htmlElement.classList.toggle('dark');
+            const isDark = htmlElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            modeToggle.classList.toggle('toggle-dark', isDark);
+        });
+
+        // Update time function
+        function updateTime() {
+            try {
+                const now = new Date();
+                const hours = now.getHours() % 12 || 12; // Convert to 12-hour format
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                const seconds = now.getSeconds().toString().padStart(2, '0');
+                const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+                
+                const day = days[now.getDay()];
+                const date = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                
+                timeElement.textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
+                dateElement.textContent = date;
+                dayElement.textContent = day;
+                timeZoneElement.textContent = timeZone;
+                
+                // 如果元素成功更新，隐藏提示
+                systemTimeAlert.classList.remove('visible');
+            } catch (error) {
+                console.error('Error updating time:', error);
+                // 如果更新失败，显示提示
+                systemTimeAlert.classList.add('visible');
+            }
+        }
+
+        // 初始检查系统时间是否可用
+        function checkSystemTime() {
+            try {
+                // 尝试获取当前时间
+                const now = new Date();
+                // 如果年份异常，可能是系统时间问题
+                if (now.getFullYear() < 2000 || now.getFullYear() > 2100) {
+                    throw new Error('System time is out of range');
+                }
+                systemTimeAlert.classList.remove('visible');
+            } catch (error) {
+                console.error('System time check failed:', error);
+                systemTimeAlert.classList.add('visible');
+            }
+        }
+
+        // 初始调用
+        checkSystemTime();
+        updateTime();
+        
+        // 每秒更新一次
+        setInterval(updateTime, 1000);
+    </script>
 </body>
 </html>
+    
